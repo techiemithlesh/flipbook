@@ -36,8 +36,8 @@
         </a>
         <div id="collapseTwo" class="collapse" aria-labelledby="headingTwo" data-parent="#accordionSidebar">
             <div class="bg-white py-2 collapse-inner rounded">
-                <a class="collapse-item" href="buttons.html">Book List</a>
-                <a class="collapse-item" href="cards.html">Upload Book</a>
+                <a class="collapse-item" href="{{route('admin.books.index')}}">Book List</a>
+                <a class="collapse-item" href="{{route('admin.books.upload.form')}}">Upload Book</a>
             </div>
         </div>
     </li>
