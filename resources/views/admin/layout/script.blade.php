@@ -16,3 +16,5 @@
 @endif
 
 <script src="{{asset('backend/vendor/chart.js/Chart.min.js')}}"></script>
+<!-- Uppy JS -->
+<script src="https://releases.transloadit.com/uppy/v3.13.0/uppy.min.js"></script>

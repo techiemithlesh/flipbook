@@ -7,6 +7,7 @@ use App\Models\Book;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Response;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use ZipArchive;
 
@@ -106,6 +107,45 @@ class FlipbookController extends Controller
             'success' => true,
             'message' => $isBulk ? 'Bulk flipbooks uploaded successfully.' : 'Flipbook uploaded successfully.',
             'books' => $uploadedBooks
+        ]);
+    }
+
+
+    public function getS3PresignedUrl(Request $request)
+    {
+        $filename = $request->input('filename');
+        $filetype = $request->input('filetype', 'application/zip');
+        $path = 'flipbooks/' . Str::uuid() . '/' . $filename;
+
+        $url = Storage::disk('s3')->temporaryUrl(
+            $path,
+            now()->addMinutes(15),
+            ['Content-Type' => $filetype]
+        );
+
+        return response()->json(['url' => $url, 'path' => $path]);
+    }
+
+    public function storeFlipbookMetadata(Request $request)
+    {
+        $validated = $request->validate([
+            'name' => 'required|string',
+            'url' => 'required|url'
+        ]);
+
+        // Generate slug from name
+        $slug = Str::slug($validated['name']);
+
+        // Store the flipbook record in the books table
+        $book = Book::create([
+            'title' => $validated['name'],
+            'slug' => $slug,
+            'path' => $validated['url'],
+        ]);
+
+        return response()->json([
+            'message' => 'Flipbook metadata stored successfully.',
+            'book' => $book
         ]);
     }
 }

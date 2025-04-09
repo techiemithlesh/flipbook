@@ -19,6 +19,11 @@ Route::middleware(['auth', 'verified'])->prefix('admin')->name('admin.')->group(
     
 });
 
+Route::post('/s3-presign', [FlipbookController::class, 'getS3PresignedUrl']);
+Route::post('/admin/flipbooks/store-metadata', [FlipbookController::class, 'storeFlipbookMetadata'])->name('admin.flipbooks.store-metadata');
+
+
+
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
