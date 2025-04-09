@@ -23,6 +23,9 @@
     <!-- Custom styles for this template-->
     <link href="{{ asset('backend/css/sb-admin-2.min.css') }}" rel="stylesheet">
 
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+
+
 </head>
 
 <body id="page-top">

@@ -16,11 +16,12 @@ Route::middleware(['auth', 'verified'])->prefix('admin')->name('admin.')->group(
     Route::get('/dashboard', [AdminController::class, 'index'])->name('dashboard');
     Route::get('/books/upload', [FlipbookController::class, 'create'])->name('books.upload.form');
     Route::post('/books/upload', [FlipbookController::class, 'store'])->name('flipbooks.upload');
-    
+
+    Route::post('/flipbooks/store-metadata', [FlipbookController::class, 'storeFlipbookMetadata'])
+    ->name('flipbooks.store-metadata');
 });
 
-Route::post('/s3-presign', [FlipbookController::class, 'getS3PresignedUrl']);
-Route::post('/admin/flipbooks/store-metadata', [FlipbookController::class, 'storeFlipbookMetadata'])->name('admin.flipbooks.store-metadata');
+Route::post('/s3-presign', [FlipbookController::class, 'getS3PresignedUrl'])->middleware('auth');
 
 
 
@@ -30,4 +31,4 @@ Route::middleware('auth')->group(function () {
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
 
-require __DIR__.'/auth.php';
+require __DIR__ . '/auth.php';

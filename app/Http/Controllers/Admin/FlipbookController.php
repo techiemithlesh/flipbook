@@ -4,8 +4,10 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Book;
+use Aws\S3\S3Client;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Response;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -113,30 +115,96 @@ class FlipbookController extends Controller
 
     public function getS3PresignedUrl(Request $request)
     {
-        $filename = $request->input('filename');
-        $filetype = $request->input('filetype', 'application/zip');
-        $path = 'flipbooks/' . Str::uuid() . '/' . $filename;
+        try {
+            $validated = $request->validate([
+                'filename' => 'required|string',
+                'filetype' => 'nullable|string'
+            ]);
 
-        $url = Storage::disk('s3')->temporaryUrl(
-            $path,
-            now()->addMinutes(15),
-            ['Content-Type' => $filetype]
-        );
+            $filename = $validated['filename'];
+            $filetype = $validated['filetype'] ?? 'application/zip';
 
-        return response()->json(['url' => $url, 'path' => $path]);
+            // Generate a unique path for the file
+            $uuid = Str::uuid()->toString();
+            $path = 'flipbooks/' . $uuid . '/' . $filename;
+
+            // First check if AWS credentials are properly configured
+            if (!config('filesystems.disks.s3.key') || !config('filesystems.disks.s3.secret') || !config('filesystems.disks.s3.region')) {
+                Log::error('AWS S3 credentials are missing or incomplete');
+                return response()->json(['error' => 'S3 configuration is incomplete'], 500);
+            }
+
+            // Create S3 client with credentials
+            try {
+                $s3Client = new S3Client([
+                    'region' => config('filesystems.disks.s3.region'),
+                    'version' => 'latest',
+                    'credentials' => [
+                        'key' => config('filesystems.disks.s3.key'),
+                        'secret' => config('filesystems.disks.s3.secret'),
+                    ],
+                ]);
+
+                $bucket = config('filesystems.disks.s3.bucket');
+
+                // Test the S3 connection by checking if the bucket exists
+                if (!$s3Client->doesBucketExist($bucket)) {
+                    Log::error("S3 bucket {$bucket} does not exist or is not accessible");
+                    return response()->json(['error' => 'S3 bucket not accessible'], 500);
+                }
+            } catch (\Exception $e) {
+                Log::error('AWS S3 client error: ' . $e->getMessage());
+                return response()->json(['error' => 'AWS S3 client error: ' . $e->getMessage()], 500);
+            }
+
+            // Create simple presigned URL for PUT operation
+            try {
+                $command = $s3Client->getCommand('PutObject', [
+                    'Bucket' => $bucket,
+                    'Key' => $path,
+                    'ContentType' => $filetype,
+                ]);
+
+                $presignedRequest = $s3Client->createPresignedRequest($command, '+1 hour');
+                $presignedUrl = (string)$presignedRequest->getUri();
+
+                // Calculate the public URL for this object after upload
+                $publicUrl = "https://{$bucket}.s3.{$s3Client->getRegion()}.amazonaws.com/{$path}";
+
+                return response()->json([
+                    'url' => $presignedUrl,
+                    'method' => 'PUT',
+                    'fields' => [],
+                    'headers' => [
+                        'Content-Type' => $filetype
+                    ],
+                    'path' => $path,
+                    'publicUrl' => $publicUrl
+                ]);
+            } catch (\Exception $e) {
+                Log::error('Failed to create presigned URL: ' . $e->getMessage());
+                return response()->json(['error' => 'Failed to create presigned URL: ' . $e->getMessage()], 500);
+            }
+        } catch (\Exception $e) {
+            Log::error('S3 presign general error: ' . $e->getMessage());
+            return response()->json(['error' => 'Error: ' . $e->getMessage()], 500);
+        }
     }
+
 
     public function storeFlipbookMetadata(Request $request)
     {
+        Log::info('request', $request->all());
+
         $validated = $request->validate([
             'name' => 'required|string',
-            'url' => 'required|url'
+            'url' => 'required|url',
         ]);
 
-        // Generate slug from name
+        Log::info('Incoming metadata', $validated);
+
         $slug = Str::slug($validated['name']);
 
-        // Store the flipbook record in the books table
         $book = Book::create([
             'title' => $validated['name'],
             'slug' => $slug,
