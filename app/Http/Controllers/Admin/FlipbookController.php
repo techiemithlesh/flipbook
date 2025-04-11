@@ -216,4 +216,66 @@ class FlipbookController extends Controller
             'book' => $book
         ]);
     }
+
+    public function upload(Request $request)
+    {
+        $request->validate([
+            'flipbook' => 'required|file|max:102400',
+        ]);
+
+        $file = $request->file('flipbook');
+        $originalName = pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME);
+        $slug = Str::slug($originalName);
+        $tempPath = storage_path("app/temp/{$slug}");
+
+        // Make temp directory
+        if (!is_dir($tempPath)) {
+            mkdir($tempPath, 0755, true);
+        }
+
+        // Move ZIP to temp location
+        $zipPath = "{$tempPath}/flipbook.zip";
+        $file->move($tempPath, 'flipbook.zip');
+
+        // Extract ZIP
+        $zip = new ZipArchive;
+        if ($zip->open($zipPath) === true) {
+            $zip->extractTo($tempPath);
+            $zip->close();
+        } else {
+            return response()->json(['error' => 'Failed to unzip flipbook'], 500);
+        }
+
+        // Upload to S3 (excluding the ZIP itself)
+        $s3Path = "flipbooks/{$slug}/";
+        $files = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($tempPath, \RecursiveDirectoryIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::SELF_FIRST
+        );
+
+        foreach ($files as $filePath) {
+            if ($filePath->isFile() && $filePath->getFilename() !== 'flipbook.zip') {
+                $localPath = $filePath->getPathname();
+                $relativePath = str_replace($tempPath . '/', '', $localPath);
+                $s3FullPath = $s3Path . $relativePath;
+
+                Storage::disk('s3')->put($s3FullPath, file_get_contents($localPath), 'public');
+            }
+        }
+
+        // Clean up local temp files
+        File::deleteDirectory($tempPath);
+
+        // Save to DB if needed (optional)
+        Book::create([
+            'name' => $originalName,
+            'slug' => $slug,
+            'url' => "https://books.futurecampus.in/{$slug}/"
+        ]);
+
+        return response()->json([
+            'message' => 'Flipbook uploaded successfully.',
+            'publicUrl' => "https://books.futurecampus.in/{$slug}/"
+        ]);
+    }
 }
