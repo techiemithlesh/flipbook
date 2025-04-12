@@ -25,7 +25,7 @@
                             <td>{{ $book->title }}</td>
                             <td>{{ $book->slug }}</td>
                             <td>
-                                <a href="<?=base_url('/{{ $book->slug }}/')  ?>" target="_blank">
+                                <a href="{{ url($book->slug . '/') }}" target="_blank">
                                     View Flipbook
                                 </a>
                             </td>
